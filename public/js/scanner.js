@@ -85,15 +85,45 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Barcode Input Events (Handheld Gun / Manual)
+  // Auto-Detect Barcode Input Events (Handheld Gun / Typing / Paste)
+  let autoDetectTimer = null;
+  let lastKeypressTime = 0;
+
   barcodeInput.addEventListener('keydown', (e) => {
+    lastKeypressTime = Date.now();
     if (e.key === 'Enter') {
       e.preventDefault();
+      if (autoDetectTimer) clearTimeout(autoDetectTimer);
       handleBarcodeSubmit();
     }
   });
 
-  btnClaimMeal.addEventListener('click', handleBarcodeSubmit);
+  barcodeInput.addEventListener('input', () => {
+    const val = barcodeInput.value.trim();
+    if (autoDetectTimer) clearTimeout(autoDetectTimer);
+
+    if (!val || val.length < 3) return;
+
+    // Detect fast bursts from handheld barcode scanner guns (< 65ms per character)
+    const isRapid = (Date.now() - lastKeypressTime) < 65;
+    const delay = isRapid ? 120 : 400;
+
+    autoDetectTimer = setTimeout(() => {
+      handleBarcodeSubmit();
+    }, delay);
+  });
+
+  barcodeInput.addEventListener('paste', () => {
+    setTimeout(() => {
+      if (barcodeInput.value.trim().length >= 3) {
+        handleBarcodeSubmit();
+      }
+    }, 100);
+  });
+
+  if (btnClaimMeal) {
+    btnClaimMeal.addEventListener('click', handleBarcodeSubmit);
+  }
 
   // Camera Toggle
   btnToggleCamera.addEventListener('click', toggleCamera);

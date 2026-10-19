@@ -13,7 +13,8 @@ import {
   History,
   UserPlus,
   Utensils,
-  Clock
+  Clock,
+  Zap
 } from 'lucide-react';
 
 export default function ScannerView({ overrideCounterId = null }) {
@@ -53,10 +54,22 @@ export default function ScannerView({ overrideCounterId = null }) {
   const scannerContainerId = `qr-reader-${currentCounter.replace(/\s+/g, '-')}`;
   const inputRef = useRef(null);
   const lastScannedRef = useRef({ code: '', time: 0 });
+  const autoDetectTimerRef = useRef(null);
+  const lastKeyTimeRef = useRef(0);
+  const isProcessingRef = useRef(false);
 
   // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus();
+  }, []);
+
+  // Cleanup auto-detect timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoDetectTimerRef.current) {
+        clearTimeout(autoDetectTimerRef.current);
+      }
+    };
   }, []);
 
   // Process Scan
@@ -65,32 +78,98 @@ export default function ScannerView({ overrideCounterId = null }) {
       const clean = (code || '').trim().toUpperCase();
       if (!clean) return;
 
+      if (autoDetectTimerRef.current) {
+        clearTimeout(autoDetectTimerRef.current);
+        autoDetectTimerRef.current = null;
+      }
+
       // Debounce duplicate immediate physical scans
       const now = Date.now();
       if (clean === lastScannedRef.current.code && now - lastScannedRef.current.time < 2500) {
+        setBarcodeInput('');
         return;
       }
       lastScannedRef.current = { code: clean, time: now };
 
-      const res = await claimMeal({
-        participantId: clean,
-        customCounterId: currentCounter,
-        customVolunteerName: volunteerName
-      });
+      if (isProcessingRef.current) return;
+      isProcessingRef.current = true;
 
-      setScanResult(res);
+      try {
+        const res = await claimMeal({
+          participantId: clean,
+          customCounterId: currentCounter,
+          customVolunteerName: volunteerName
+        });
 
-      if (res.status === 'CLAIMED' && res.claim) {
-        setCounterLog((prev) => [res.claim, ...prev]);
-      } else if (res.status === 'NOT_FOUND') {
-        setWalkinPrefillId(clean);
+        setScanResult(res);
+
+        if (res.status === 'CLAIMED' && res.claim) {
+          setCounterLog((prev) => [res.claim, ...prev]);
+        } else if (res.status === 'NOT_FOUND') {
+          setWalkinPrefillId(clean);
+        }
+      } finally {
+        isProcessingRef.current = false;
+        setBarcodeInput('');
+        inputRef.current?.focus();
       }
-
-      setBarcodeInput('');
-      inputRef.current?.focus();
     },
     [claimMeal, currentCounter, volunteerName]
   );
+
+  // Auto-detect input handlers for barcode gun and typing
+  const handleInputChange = (e) => {
+    const val = e.target.value;
+    setBarcodeInput(val);
+
+    if (autoDetectTimerRef.current) {
+      clearTimeout(autoDetectTimerRef.current);
+      autoDetectTimerRef.current = null;
+    }
+
+    const clean = val.trim().toUpperCase();
+    if (!clean || clean.length < 3) {
+      return;
+    }
+
+    // Determine delay:
+    // Barcode scanner guns type characters rapidly (< 65ms per character) -> trigger quickly (120ms)
+    // Manual typing -> wait 400ms for user to finish input
+    const now = Date.now();
+    const isRapid = now - lastKeyTimeRef.current < 65;
+    const delay = isRapid ? 120 : 400;
+
+    autoDetectTimerRef.current = setTimeout(() => {
+      handleProcessBarcode(clean);
+    }, delay);
+  };
+
+  const handleKeyDown = (e) => {
+    lastKeyTimeRef.current = Date.now();
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (autoDetectTimerRef.current) {
+        clearTimeout(autoDetectTimerRef.current);
+        autoDetectTimerRef.current = null;
+      }
+      handleProcessBarcode(barcodeInput);
+    }
+  };
+
+  const handlePaste = (e) => {
+    const pasted = e.clipboardData?.getData('text');
+    if (pasted && pasted.trim().length >= 3) {
+      e.preventDefault();
+      const clean = pasted.trim().toUpperCase();
+      setBarcodeInput(clean);
+      if (autoDetectTimerRef.current) {
+        clearTimeout(autoDetectTimerRef.current);
+      }
+      autoDetectTimerRef.current = setTimeout(() => {
+        handleProcessBarcode(clean);
+      }, 100);
+    }
+  };
 
   // Camera Scanner Toggle
   const toggleCamera = async () => {
@@ -323,43 +402,38 @@ export default function ScannerView({ overrideCounterId = null }) {
                   <Barcode className="w-4 h-4 text-slate-400" />
                   Scan Barcode Gun / Type Participant ID
                 </span>
-                <span className="text-[11px] text-slate-500 font-mono">Press Enter</span>
+                <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Auto-Detect Active
+                </span>
               </label>
 
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={barcodeInput}
-                    onChange={(e) => setBarcodeInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleProcessBarcode(barcodeInput);
-                      }
-                    }}
-                    placeholder="e.g. MED-1001"
-                    className="glass-input w-full font-mono text-base tracking-wider uppercase pl-10"
-                    autoComplete="off"
-                  />
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+              <div className="relative">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={barcodeInput}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  onPaste={handlePaste}
+                  placeholder="Scan barcode or type ID (auto-claims instantly)..."
+                  className="glass-input w-full font-mono text-base tracking-wider uppercase pl-10 pr-36"
+                  autoComplete="off"
+                />
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
+                <div className="absolute right-2.5 top-2.5 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-semibold text-emerald-400 pointer-events-none shadow-sm">
+                  <Zap className="w-3.5 h-3.5 animate-pulse text-emerald-400" />
+                  Auto-Detect
                 </div>
-                <button
-                  onClick={() => handleProcessBarcode(barcodeInput)}
-                  className="px-5 py-2.5 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-500 text-white flex items-center gap-1.5 shadow-lg transition"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  Verify & Claim
-                </button>
               </div>
 
               {/* Sample Test Pills */}
               <div className="mt-3 flex items-center gap-2 overflow-x-auto py-1">
-                <span className="text-[11px] text-slate-500 font-medium whitespace-nowrap">Test Pills:</span>
+                <span className="text-[11px] text-slate-500 font-medium whitespace-nowrap">Instant Auto-Claim:</span>
                 {['MED-1001', 'MED-1002', 'MED-1003', 'MED-1004', 'MED-9999'].map((id) => (
                   <button
                     key={id}
+                    type="button"
                     onClick={() => handleProcessBarcode(id)}
                     className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-300 border border-slate-700 whitespace-nowrap transition"
                   >
