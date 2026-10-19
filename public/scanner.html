@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Volunteer Scanner | Medaithon Food System</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="/vendor/lucide/lucide.min.js"></script>
+  <!-- HTML5 QR Code Scanner -->
+  <script src="/vendor/html5-qrcode/html5-qrcode.min.js"></script>
+  <!-- Canvas Confetti -->
+  <script src="/vendor/canvas-confetti/confetti.browser.js"></script>
+  <!-- Socket.io -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="p-3 md:p-6 pb-20">
+
+  <!-- Top Navigation & Live Session Status -->
+  <header class="max-w-5xl mx-auto mb-6">
+    <div class="glass-panel p-4 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <img src="/assets/medai-removebg-preview.png" alt="Logo" class="h-10 w-auto object-contain" onerror="this.src='/assets/logo.png'">
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+              Medaithon Food Desk
+            </h1>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              Volunteer Terminal
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Scan ID Barcode & Realtime Dual-Counter Sync</p>
+        </div>
+      </div>
+
+      <!-- Quick Nav Buttons -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <a href="/dashboard.html" target="_blank" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 flex items-center gap-1.5 transition">
+          <i data-lucide="tv" class="w-3.5 h-3.5 text-cyan-400"></i>
+          Live Projector
+        </a>
+        <a href="/admin.html" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 flex items-center gap-1.5 transition">
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-amber-400"></i>
+          Admin Page
+        </a>
+        <a href="/badges.html" target="_blank" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 flex items-center gap-1.5 transition">
+          <i data-lucide="qr-code" class="w-3.5 h-3.5 text-emerald-400"></i>
+          Test Barcodes
+        </a>
+        <!-- Sound Toggle -->
+        <button id="btnSoundToggle" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition" title="Toggle Sound">
+          <i data-lucide="volume-2" id="iconSound" class="w-4 h-4 text-emerald-400"></i>
+        </button>
+        <!-- Realtime Socket Pill -->
+        <div id="socketStatus" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>Online</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Active Meal Session & Counter Config Bar -->
+  <main class="max-w-5xl mx-auto space-y-6">
+
+    <!-- Counter Setup & Live Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      
+      <!-- Counter Selector Card -->
+      <div class="glass-panel p-4 flex flex-col justify-between">
+        <div>
+          <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+            Current Counter & Volunteer
+          </label>
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <div>
+              <select id="selectCounter" class="glass-input w-full text-sm font-semibold text-indigo-300 cursor-pointer">
+                <option value="Counter 1">Counter 1 (Main Hall)</option>
+                <option value="Counter 2">Counter 2 (Side Wing)</option>
+                <option value="Counter 3">Counter 3 (Express Desk)</option>
+                <option value="Counter 4">Counter 4 (VIP / Faculty)</option>
+              </select>
+            </div>
+            <div>
+              <input type="text" id="inputVolunteerName" class="glass-input w-full text-sm" placeholder="Volunteer Name" value="Volunteer 1">
+            </div>
+          </div>
+          <div class="text-[11px] text-slate-400 flex items-center justify-between">
+            <span>Synced across all counters</span>
+            <span id="counterServedCount" class="font-bold text-indigo-400">0 claimed here</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Meal Type / Session Selector Card -->
+      <div class="glass-panel p-4 relative overflow-hidden flex flex-col justify-between border-indigo-500/30">
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label for="selectMealSession" class="text-xs font-semibold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-indicator"></span>
+              Meal Type (From Admin)
+            </label>
+            <span id="sessionTiming" class="text-xs text-slate-400 font-mono">12:30 - 15:00</span>
+          </div>
+
+          <!-- Dynamic Dropdown populated with all meals added in Admin -->
+          <div class="relative mb-1">
+            <select id="selectMealSession" class="glass-input w-full text-sm font-bold text-white bg-slate-900/90 border-indigo-500/40 cursor-pointer py-2 pr-8 appearance-none">
+              <option value="">Loading meals from Admin...</option>
+            </select>
+            <i data-lucide="chevron-down" class="w-4 h-4 text-indigo-400 absolute right-2.5 top-3 pointer-events-none"></i>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between text-xs text-slate-300 mt-2 pt-2 border-t border-white/5">
+          <span>Target Meals: <strong id="statTotalTarget" class="text-white font-mono">350</strong></span>
+          <span class="text-emerald-400">Status: <strong id="sessionStatusText" class="text-emerald-300">ACTIVE</strong></span>
+        </div>
+      </div>
+
+      <!-- Realtime Combined Live Counter -->
+      <div class="glass-panel p-4 flex flex-col justify-between bg-gradient-to-br from-indigo-950/40 to-slate-900/60 border-indigo-500/20">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Overall Progress</span>
+          <span id="statPercentBadge" class="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">0%</span>
+        </div>
+        <div class="grid grid-cols-2 gap-4 my-1">
+          <div>
+            <div class="text-2xl font-extrabold text-emerald-400 font-mono tracking-tight" id="statClaimedTotal">
+              0
+            </div>
+            <div class="text-[11px] text-slate-400 uppercase font-medium">Claimed (All Counters)</div>
+          </div>
+          <div>
+            <div class="text-2xl font-extrabold text-cyan-400 font-mono tracking-tight" id="statRemainingTotal">
+              0
+            </div>
+            <div class="text-[11px] text-slate-400 uppercase font-medium">Meals Left</div>
+          </div>
+        </div>
+        <!-- Mini Progress Bar -->
+        <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+          <div id="statProgressBar" class="bg-gradient-to-r from-indigo-500 to-emerald-400 h-1.5 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Main Scanner & Result Section -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Left Column: Scanning Viewfinder & Input (7 cols) -->
+      <div class="lg:col-span-7 space-y-4">
+        
+        <!-- Scanner Card -->
+        <div class="glass-panel p-5">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2">
+              <i data-lucide="scan-line" class="w-5 h-5 text-indigo-400"></i>
+              <h3 class="font-bold text-white text-base">Barcode / QR Scanner</h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <!-- Camera Toggle Button -->
+              <button id="btnToggleCamera" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 transition">
+                <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                <span id="cameraBtnText">Start Camera</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Video Viewport -->
+          <div id="scannerWrapper" class="relative rounded-xl overflow-hidden bg-black/90 border border-slate-800 min-h-[220px] max-h-[340px] flex items-center justify-center">
+            <div id="qr-reader" class="w-full h-full"></div>
+            
+            <!-- Placeholder when camera is inactive -->
+            <div id="cameraPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-slate-400 p-6 text-center space-y-3">
+              <div class="w-14 h-14 rounded-full bg-slate-800 flex items-center justify-center text-indigo-400">
+                <i data-lucide="camera-off" class="w-7 h-7"></i>
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-slate-200">Camera is paused</p>
+                <p class="text-xs text-slate-500 max-w-xs mt-1">
+                  Click "Start Camera" to scan via webcam/phone camera, or scan using a USB barcode gun / typing below.
+                </p>
+              </div>
+              <button onclick="document.getElementById('btnToggleCamera').click()" class="btn-primary text-xs py-2 px-4">
+                <i data-lucide="camera" class="w-3.5 h-3.5"></i>
+                Turn On Camera
+              </button>
+            </div>
+
+            <!-- Scanning overlay line -->
+            <div id="scanLaserLine" class="hidden absolute top-0 left-0 right-0 h-0.5 bg-emerald-400 shadow-[0_0_12px_#10b981] animate-pulse"></div>
+          </div>
+
+          <!-- Barcode Gun / Manual Input Section -->
+          <div class="mt-4 pt-4 border-t border-slate-800">
+            <label class="block text-xs font-medium text-slate-300 mb-1.5 flex items-center justify-between">
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="barcode" class="w-4 h-4 text-slate-400"></i>
+                Barcode Handheld Gun / ID Number Input
+              </span>
+              <span class="text-[11px] text-slate-500 font-mono">Press Enter to Claim</span>
+            </label>
+            <div class="flex gap-2">
+              <div class="relative flex-1">
+                <input 
+                  type="text" 
+                  id="barcodeInput" 
+                  class="glass-input w-full font-mono text-base tracking-wider uppercase pl-10" 
+                  placeholder="e.g. MED-1001" 
+                  autofocus
+                  autocomplete="off"
+                >
+                <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3.5"></i>
+              </div>
+              <button id="btnClaimMeal" class="btn-success px-5 font-semibold text-sm">
+                <i data-lucide="check-circle" class="w-4 h-4"></i>
+                Verify & Claim
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Test Sample Barcode Pills -->
+          <div class="mt-3 flex items-center gap-2 overflow-x-auto py-1">
+            <span class="text-[11px] text-slate-500 font-medium whitespace-nowrap">Test with ID:</span>
+            <button onclick="quickScan('MED-1001')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-300 border border-slate-700">MED-1001</button>
+            <button onclick="quickScan('MED-1002')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-300 border border-slate-700">MED-1002</button>
+            <button onclick="quickScan('MED-1003')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-300 border border-slate-700">MED-1003</button>
+            <button onclick="quickScan('MED-1004')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-xs font-mono text-slate-300 border border-slate-700">MED-1004</button>
+            <button onclick="quickScan('MED-9999')" class="px-2 py-1 rounded bg-rose-950/40 hover:bg-rose-900/40 text-xs font-mono text-rose-300 border border-rose-800/40" title="Test Unregistered ID">MED-9999 (Unregistered)</button>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Right Column: Verification Result Card & Recent Activity (5 cols) -->
+      <div class="lg:col-span-5 space-y-4">
+        
+        <!-- Live Scan Feedback Card -->
+        <div id="scanResultCard" class="glass-panel p-5 min-h-[300px] flex flex-col justify-center items-center text-center transition-all duration-300">
+          
+          <!-- Idle State -->
+          <div id="stateIdle" class="flex flex-col items-center justify-center p-6 space-y-3">
+            <div class="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+              <i data-lucide="scan" class="w-8 h-8"></i>
+            </div>
+            <div>
+              <h4 class="text-base font-bold text-white">Ready for Next Participant</h4>
+              <p class="text-xs text-slate-400 mt-1 max-w-xs">
+                Scan ID barcode or QR code with camera, or scan using USB barcode reader.
+              </p>
+            </div>
+          </div>
+
+          <!-- SUCCESS STATE: Meal Claimed -->
+          <div id="stateSuccess" class="hidden w-full flex flex-col items-center animate-slide-down">
+            <div class="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center text-emerald-400 mb-3 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+              <i data-lucide="check" class="w-10 h-10 stroke-[3]"></i>
+            </div>
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-bold uppercase tracking-wider mb-2">
+              Meal Claimed Successfully
+            </div>
+            
+            <h3 id="resParticipantName" class="text-2xl font-black text-white tracking-tight">
+              Aarav Sharma
+            </h3>
+            <div class="flex items-center gap-2 mt-1">
+              <span id="resParticipantId" class="font-mono text-xs font-bold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20">
+                MED-1001
+              </span>
+              <span id="resDietBadge"></span>
+            </div>
+
+            <!-- Participant Details Box -->
+            <div class="w-full mt-4 p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-left space-y-1.5 text-xs">
+              <div class="flex justify-between">
+                <span class="text-slate-400">Team / Project:</span>
+                <span id="resTeamName" class="font-semibold text-slate-200">NeuralPulse</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">College / Inst:</span>
+                <span id="resCollege" class="font-semibold text-slate-200 truncate max-w-[180px]">IIT Madras</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-slate-400">Meal Session:</span>
+                <span id="resMealName" class="font-semibold text-indigo-300 truncate max-w-[180px]">Day 1 Lunch</span>
+              </div>
+              <div class="flex justify-between border-t border-slate-800 pt-1.5 text-[11px]">
+                <span class="text-slate-500">Processed by:</span>
+                <span id="resCounterTime" class="text-slate-400 font-mono">Counter 1 • 12:45 PM</span>
+              </div>
+            </div>
+
+            <p class="text-xs font-semibold text-emerald-400 mt-3 flex items-center gap-1">
+              <i data-lucide="utensils" class="w-3.5 h-3.5"></i>
+              Please collect your food tray!
+            </p>
+          </div>
+
+          <!-- DUPLICATE STATE: Already Claimed -->
+          <div id="stateDuplicate" class="hidden w-full flex flex-col items-center animate-slide-down">
+            <div class="w-16 h-16 rounded-full bg-rose-500/20 border-2 border-rose-500 flex items-center justify-center text-rose-400 mb-3 shadow-[0_0_20px_rgba(244,63,94,0.3)]">
+              <i data-lucide="alert-triangle" class="w-9 h-9 stroke-[2.5]"></i>
+            </div>
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 text-xs font-bold uppercase tracking-wider mb-2">
+              ALREADY CLAIMED!
+            </div>
+            
+            <h3 id="dupParticipantName" class="text-2xl font-black text-white tracking-tight">
+              Aarav Sharma
+            </h3>
+            <div class="flex items-center gap-2 mt-1">
+              <span id="dupParticipantId" class="font-mono text-xs font-bold text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                MED-1001
+              </span>
+              <span id="dupDietBadge"></span>
+            </div>
+
+            <div class="w-full mt-4 p-3 rounded-xl bg-rose-950/40 border border-rose-800/50 text-left space-y-1.5 text-xs text-rose-200">
+              <div class="flex items-center gap-1.5 font-bold text-rose-300">
+                <i data-lucide="info" class="w-4 h-4"></i>
+                <span>Duplicate Claim Prevented</span>
+              </div>
+              <p id="dupDetails" class="text-xs text-slate-300">
+                This participant already claimed food for this session!
+              </p>
+              <div class="border-t border-rose-800/30 pt-1 text-[11px] text-slate-400 flex justify-between font-mono" id="dupTimestamp">
+                <span>Claimed at: 12:35 PM</span>
+                <span>Counter 1</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- NOT FOUND STATE: Walk-in prompt -->
+          <div id="stateNotFound" class="hidden w-full flex flex-col items-center animate-slide-down">
+            <div class="w-16 h-16 rounded-full bg-amber-500/20 border-2 border-amber-500 flex items-center justify-center text-amber-400 mb-3">
+              <i data-lucide="help-circle" class="w-9 h-9 stroke-[2.5]"></i>
+            </div>
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-xs font-bold uppercase tracking-wider mb-2">
+              Participant Not Found
+            </div>
+            <p class="text-sm font-semibold text-slate-200" id="notFoundMessage">
+              ID "MED-9999" is not registered in the database.
+            </p>
+            <p class="text-xs text-slate-400 mt-1 max-w-xs">
+              Would you like to register this participant as a manual on-site walk-in?
+            </p>
+
+            <button id="btnOpenManualEntry" class="btn-primary mt-4 text-xs py-2 px-4 w-full">
+              <i data-lucide="user-plus" class="w-4 h-4"></i>
+              Add Manual Walk-in & Claim Meal
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Recent Scans at this Counter -->
+        <div class="glass-panel p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+              <i data-lucide="history" class="w-3.5 h-3.5 text-indigo-400"></i>
+              My Counter Scan Log
+            </h4>
+            <span id="myCounterLogCount" class="text-[11px] font-mono text-slate-500">0 records</span>
+          </div>
+
+          <div id="myCounterLog" class="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+            <p class="text-xs text-slate-500 text-center py-4">No scans processed at this counter yet.</p>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Walk-in Registration Modal -->
+  <div id="modalWalkin" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="glass-panel-elevated max-w-md w-full p-6 animate-slide-down">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <i data-lucide="user-plus" class="w-5 h-5 text-indigo-400"></i>
+          Manual Walk-in Registration
+        </h3>
+        <button onclick="closeWalkinModal()" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+      </div>
+
+      <form id="formWalkin" class="mt-4 space-y-3.5">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Barcode / Participant ID *</label>
+          <input type="text" id="walkinId" required class="glass-input w-full font-mono text-sm uppercase" placeholder="e.g. MED-WALK01">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Full Name *</label>
+          <input type="text" id="walkinName" required class="glass-input w-full text-sm" placeholder="Participant Name">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">College / Organization</label>
+            <input type="text" id="walkinCollege" class="glass-input w-full text-sm" placeholder="e.g. SRM / MIT">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Team Name</label>
+            <input type="text" id="walkinTeam" class="glass-input w-full text-sm" placeholder="Team Name">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Diet Preference *</label>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-700 cursor-pointer">
+              <input type="radio" name="walkinDiet" value="Veg" checked class="accent-emerald-500">
+              <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> VEG
+              </span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-lg bg-slate-900 border border-slate-700 cursor-pointer">
+              <input type="radio" name="walkinDiet" value="Non-Veg" class="accent-rose-500">
+              <span class="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-rose-500"></span> NON-VEG
+              </span>
+            </label>
+          </div>
+        </div>
+        <div class="pt-2">
+          <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+            <input type="checkbox" id="walkinAutoClaim" checked class="accent-indigo-500 w-4 h-4 rounded">
+            <span>Immediately claim meal for active session upon saving</span>
+          </label>
+        </div>
+
+        <div class="pt-3 flex gap-2">
+          <button type="button" onclick="closeWalkinModal()" class="btn-secondary flex-1 py-2 text-xs">
+            Cancel
+          </button>
+          <button type="submit" class="btn-primary flex-1 py-2 text-xs">
+            Save & Serve Meal
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/common.js"></script>
+  <script src="/js/scanner.js"></script>
+</body>
+</html>

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Command Center | Medaithon Food System</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="/vendor/lucide/lucide.min.js"></script>
+  <!-- Socket.io -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="p-4 md:p-8 pb-24">
+
+  <!-- Top Navigation -->
+  <header class="max-w-6xl mx-auto mb-6">
+    <div class="glass-panel p-4 md:px-6 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <img src="/assets/medai-removebg-preview.png" alt="Logo" class="h-10 w-auto object-contain" onerror="this.src='/assets/logo.png'">
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+              Medaithon Food Admin
+            </h1>
+            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              Admin Portal
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Meal Quota, Session Management & Walk-in Registration</p>
+        </div>
+      </div>
+
+      <!-- Action Links -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <a href="/dashboard.html" target="_blank" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 flex items-center gap-1.5 transition">
+          <i data-lucide="tv" class="w-3.5 h-3.5 text-cyan-400"></i>
+          Live Projector
+        </a>
+        <a href="/scanner.html" target="_blank" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 flex items-center gap-1.5 transition">
+          <i data-lucide="scan" class="w-3.5 h-3.5 text-indigo-400"></i>
+          Volunteer Scanner
+        </a>
+        <a href="/badges.html" target="_blank" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 flex items-center gap-1.5 transition">
+          <i data-lucide="printer" class="w-3.5 h-3.5 text-emerald-400"></i>
+          Print ID Badges
+        </a>
+        <a href="/api/export/csv" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white flex items-center gap-1.5 transition shadow">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i>
+          Export CSV Report
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-6xl mx-auto space-y-6">
+
+    <!-- Active Meal Session Quick Editor -->
+    <div class="glass-panel-elevated p-6 border-indigo-500/30">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-800">
+        <div>
+          <span class="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-1.5 mb-1">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 pulse-indicator"></span>
+            Real-time Active Meal Session Control
+          </span>
+          <h2 class="text-xl font-bold text-white">
+            Current Meal Configuration
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Updating the number of meals or meal name propagates instantly to all connected counters and live screens!
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="btnOpenNewSessionModal" class="btn-primary text-xs py-2 px-3.5">
+            <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+            Add New Meal Session
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Edit Active Session Form -->
+      <form id="formQuickEditSession" class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+        <input type="hidden" id="activeSessionId">
+        
+        <div class="md:col-span-5">
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Active Meal Name</label>
+          <input type="text" id="quickSessionName" required class="glass-input w-full font-semibold text-sm" placeholder="e.g. Day 1 - Lunch (Feast)">
+        </div>
+
+        <div class="md:col-span-3">
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Target Number of Meals (Quota)</label>
+          <input type="number" id="quickSessionTarget" required min="1" class="glass-input w-full font-mono text-sm font-bold text-emerald-400" placeholder="e.g. 350">
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Time Window</label>
+          <div class="flex gap-1.5">
+            <input type="text" id="quickSessionStart" class="glass-input w-full text-xs font-mono" placeholder="12:30">
+            <input type="text" id="quickSessionEnd" class="glass-input w-full text-xs font-mono" placeholder="15:00">
+          </div>
+        </div>
+
+        <div class="md:col-span-2">
+          <button type="submit" class="btn-success w-full py-2.5 text-xs font-bold">
+            <i data-lucide="save" class="w-4 h-4"></i>
+            Update Live
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Two Columns: Manual Walk-in Entry (Left) & All Meal Sessions (Right) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- LEFT: Manual Entry for Participants not in DB (5 cols) -->
+      <div class="lg:col-span-5 space-y-4">
+        <div class="glass-panel p-6 border-amber-500/30">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center">
+              <i data-lucide="user-plus" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-white text-base">Add Manual Entry</h3>
+              <p class="text-xs text-slate-400">Register participant not listed in DB</p>
+            </div>
+          </div>
+
+          <form id="formManualEntry" class="space-y-3.5 mt-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Participant ID / Barcode *</label>
+              <div class="flex gap-2">
+                <input type="text" id="manualId" required class="glass-input w-full font-mono text-sm uppercase" placeholder="e.g. MED-WALK01">
+                <button type="button" id="btnGenRandomId" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 whitespace-nowrap">
+                  Auto ID
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Full Name *</label>
+              <input type="text" id="manualName" required class="glass-input w-full text-sm" placeholder="Participant Name">
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">College / Institute</label>
+                <input type="text" id="manualCollege" class="glass-input w-full text-sm" placeholder="e.g. SRM / MIT">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">Team Name</label>
+                <input type="text" id="manualTeam" class="glass-input w-full text-sm" placeholder="e.g. BioSync">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">Email</label>
+                <input type="email" id="manualEmail" class="glass-input w-full text-sm" placeholder="email@domain.com">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">Phone</label>
+                <input type="text" id="manualPhone" class="glass-input w-full text-sm" placeholder="+91 ...">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Food Preference *</label>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-700 cursor-pointer">
+                  <input type="radio" name="manualDiet" value="Veg" checked class="accent-emerald-500">
+                  <span class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span> VEG
+                  </span>
+                </label>
+                <label class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-900 border border-slate-700 cursor-pointer">
+                  <input type="radio" name="manualDiet" value="Non-Veg" class="accent-rose-500">
+                  <span class="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-rose-500"></span> NON-VEG
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Dietary Notes / Allergies</label>
+              <input type="text" id="manualNotes" class="glass-input w-full text-xs" placeholder="e.g. Gluten free / Nut allergy">
+            </div>
+
+            <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+              <label class="flex items-center gap-2.5 cursor-pointer text-xs font-medium text-slate-200">
+                <input type="checkbox" id="manualAutoClaim" checked class="accent-indigo-500 w-4 h-4 rounded">
+                <span>Immediately claim active meal upon saving</span>
+              </label>
+            </div>
+
+            <button type="submit" class="btn-primary w-full py-2.5 text-sm font-bold shadow-lg">
+              <i data-lucide="check" class="w-4 h-4"></i>
+              Register & Broadcast to Counters
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- RIGHT: All Meal Sessions & Switcher (7 cols) -->
+      <div class="lg:col-span-7 space-y-4">
+        <div class="glass-panel p-6">
+          <div class="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+            <div>
+              <h3 class="font-bold text-white text-base">Meal Sessions List</h3>
+              <p class="text-xs text-slate-400">Switch active session or update quota</p>
+            </div>
+            <button onclick="loadSessions()" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <div id="sessionsListContainer" class="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+            <!-- Dynamically populated -->
+            <p class="text-xs text-slate-500 text-center py-8">Loading meal sessions...</p>
+          </div>
+        </div>
+
+        <!-- Testing & Emergency Tools -->
+        <div class="glass-panel p-4 flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 border-slate-800">
+          <div class="text-xs text-slate-400">
+            <span class="font-semibold text-slate-300">Testing Utilities:</span> Reset meal claims for active session to test from zero.
+          </div>
+          <button id="btnResetClaims" class="btn-secondary text-xs py-1.5 px-3 text-rose-300 border-rose-800/40 hover:bg-rose-950/40">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-400"></i>
+            Reset Session Claims
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Participant Directory Table -->
+    <div class="glass-panel p-6">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 pb-3 border-b border-slate-800">
+        <div>
+          <h3 class="font-bold text-white text-base">Registered Participants Directory</h3>
+          <p class="text-xs text-slate-400" id="participantTotalCount">Showing all registered participants</p>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="flex gap-2 max-w-sm w-full">
+          <div class="relative flex-1">
+            <input type="text" id="searchParticipant" class="glass-input w-full text-xs pl-8" placeholder="Search by ID, Name, College, Team...">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-3"></i>
+          </div>
+          <button onclick="loadParticipants()" class="btn-secondary text-xs px-3">Search</button>
+        </div>
+      </div>
+
+      <!-- Table Container -->
+      <div class="overflow-x-auto max-h-[450px]">
+        <table class="w-full text-left text-xs">
+          <thead class="text-[11px] text-slate-400 uppercase bg-slate-900/80 sticky top-0 border-b border-slate-800">
+            <tr>
+              <th class="py-2.5 px-3">Barcode / ID</th>
+              <th class="py-2.5 px-3">Participant Name</th>
+              <th class="py-2.5 px-3">College / Inst</th>
+              <th class="py-2.5 px-3">Team</th>
+              <th class="py-2.5 px-3">Diet</th>
+              <th class="py-2.5 px-3">Type</th>
+              <th class="py-2.5 px-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="participantTableBody" class="divide-y divide-slate-800/60 font-mono">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Create New Meal Session Modal -->
+  <div id="modalNewSession" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="glass-panel-elevated max-w-md w-full p-6 animate-slide-down">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <i data-lucide="calendar-plus" class="w-5 h-5 text-indigo-400"></i>
+          Create New Meal Session
+        </h3>
+        <button onclick="closeNewSessionModal()" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+      </div>
+
+      <form id="formNewSession" class="mt-4 space-y-3.5">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">Meal Name *</label>
+          <input type="text" id="newSessionName" required class="glass-input w-full text-sm font-semibold" placeholder="e.g. Day 2 - Lunch & Valedictory">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Session Date *</label>
+            <input type="date" id="newSessionDate" required class="glass-input w-full text-xs">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Target Meals *</label>
+            <input type="number" id="newSessionTarget" required min="1" value="300" class="glass-input w-full font-mono text-sm text-emerald-400">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Start Time</label>
+            <input type="text" id="newSessionStart" class="glass-input w-full text-xs font-mono" placeholder="12:30">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">End Time</label>
+            <input type="text" id="newSessionEnd" class="glass-input w-full text-xs font-mono" placeholder="15:00">
+          </div>
+        </div>
+        <div>
+          <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+            <input type="checkbox" id="newSessionActive" class="accent-indigo-500 w-4 h-4 rounded">
+            <span>Set as active session immediately</span>
+          </label>
+        </div>
+
+        <div class="pt-3 flex gap-2">
+          <button type="button" onclick="closeNewSessionModal()" class="btn-secondary flex-1 py-2 text-xs">Cancel</button>
+          <button type="submit" class="btn-primary flex-1 py-2 text-xs">Create Session</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/common.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>

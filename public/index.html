@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Medaithon Food Distribution System | Command Hub</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="/vendor/lucide/lucide.min.js"></script>
+  <!-- Socket.io -->
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="p-4 md:p-8 min-h-screen flex flex-col justify-between">
+
+  <!-- Top Hero Header -->
+  <header class="max-w-6xl mx-auto w-full mb-8">
+    <div class="glass-panel p-6 flex flex-wrap items-center justify-between gap-6 border-indigo-500/20">
+      <div class="flex items-center gap-4">
+        <img src="/assets/medai-removebg-preview.png" alt="Medaithon Logo" class="h-14 w-auto object-contain" onerror="this.src='/assets/logo.png'">
+        <div>
+          <div class="flex items-center gap-3">
+            <h1 class="text-2xl md:text-3xl font-black text-white tracking-tight">
+              Medaithon Food Logistics
+            </h1>
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+              REALTIME ACTIVE
+            </span>
+          </div>
+          <p class="text-xs md:text-sm text-slate-400 mt-0.5">
+            Realtime Multi-Counter Food Distribution, Barcode Scanning & Instant Quota Synchronization
+          </p>
+        </div>
+      </div>
+
+      <!-- Live Session Mini Card -->
+      <div class="glass-panel px-4 py-2.5 border-slate-700/80 flex items-center gap-4">
+        <div>
+          <div class="text-[10px] uppercase font-bold text-indigo-400 tracking-wider">Active Meal</div>
+          <div id="heroMealName" class="text-xs font-bold text-white truncate max-w-[200px]">Day 1 - Lunch</div>
+        </div>
+        <div class="h-8 w-[1px] bg-slate-800"></div>
+        <div>
+          <div class="text-[10px] uppercase font-bold text-emerald-400 tracking-wider">Served / Total</div>
+          <div id="heroMealStats" class="text-xs font-bold text-white font-mono">0 / 350</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Launchpad Grid -->
+  <main class="max-w-6xl mx-auto w-full flex-1 space-y-8">
+
+    <!-- Primary Station Portals (4 Core Cards) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+
+      <!-- Portal 1: Volunteer Scanner (Counter 1) -->
+      <a href="/scanner.html" class="glass-panel p-6 rounded-2xl flex flex-col justify-between group hover:border-indigo-500/50 hover:bg-slate-900/90 transition-all shadow-lg hover:-translate-y-1">
+        <div>
+          <div class="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mb-4 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow">
+            <i data-lucide="scan" class="w-6 h-6"></i>
+          </div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-400">Station Terminal</span>
+          <h2 class="text-lg font-bold text-white group-hover:text-indigo-300 transition">Volunteer Scanner</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+            Scan participant ID barcode or QR code with phone camera or USB gun. Instant duplicate verification with audio tones.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs font-semibold text-indigo-400">
+          <span>Open Scanner</span>
+          <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition"></i>
+        </div>
+      </a>
+
+      <!-- Portal 2: Live Projector Dashboard -->
+      <a href="/dashboard.html" class="glass-panel p-6 rounded-2xl flex flex-col justify-between group hover:border-emerald-500/50 hover:bg-slate-900/90 transition-all shadow-lg hover:-translate-y-1">
+        <div>
+          <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mb-4 group-hover:bg-emerald-600 group-hover:text-white transition-all shadow">
+            <i data-lucide="tv" class="w-6 h-6"></i>
+          </div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-400">Big Screen Display</span>
+          <h2 class="text-lg font-bold text-white group-hover:text-emerald-300 transition">Live Dashboard</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+            Realtime dining hall monitor: total quota, claimed vs remaining, live claim stream with participant names, and hourly velocity.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs font-semibold text-emerald-400">
+          <span>Launch Projector</span>
+          <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition"></i>
+        </div>
+      </a>
+
+      <!-- Portal 3: Admin Command Center -->
+      <a href="/admin.html" class="glass-panel p-6 rounded-2xl flex flex-col justify-between group hover:border-amber-500/50 hover:bg-slate-900/90 transition-all shadow-lg hover:-translate-y-1">
+        <div>
+          <div class="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mb-4 group-hover:bg-amber-600 group-hover:text-white transition-all shadow">
+            <i data-lucide="shield-check" class="w-6 h-6"></i>
+          </div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400">Control Center</span>
+          <h2 class="text-lg font-bold text-white group-hover:text-amber-300 transition">Admin Portal</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+            Update total meal quota, change meal names, switch active sessions, add manual walk-in entries, and export CSV reports.
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs font-semibold text-amber-400">
+          <span>Manage System</span>
+          <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition"></i>
+        </div>
+      </a>
+
+      <!-- Portal 4: Barcodes & Badges Generator -->
+      <a href="/badges.html" class="glass-panel p-6 rounded-2xl flex flex-col justify-between group hover:border-cyan-500/50 hover:bg-slate-900/90 transition-all shadow-lg hover:-translate-y-1">
+        <div>
+          <div class="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mb-4 group-hover:bg-cyan-600 group-hover:text-white transition-all shadow">
+            <i data-lucide="qr-code" class="w-6 h-6"></i>
+          </div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-cyan-400">Badges & Printing</span>
+          <h2 class="text-lg font-bold text-white group-hover:text-cyan-300 transition">Print ID Barcodes</h2>
+          <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+            Printable sheet of Code128 barcodes for all registered participants. Test scanning directly from screen using your phone!
+          </p>
+        </div>
+        <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs font-semibold text-cyan-400">
+          <span>View Badges</span>
+          <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition"></i>
+        </div>
+      </a>
+
+    </div>
+
+    <!-- Dual Counter Realtime Sync Demo Feature -->
+    <div class="glass-panel-elevated p-6 border-indigo-500/30">
+      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-800">
+        <div>
+          <span class="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 mb-1">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            User Requirement Spotlight
+          </span>
+          <h3 class="text-lg font-bold text-white">
+            Dual Counter Realtime Synchronization
+          </h3>
+          <p class="text-xs text-slate-400 mt-0.5">
+            "if there is 2 counters that means it should increase in both the dashboard at the same time"
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <!-- Button to open Counter 1 and Counter 2 side by side in popup windows -->
+          <button onclick="launchDualCounterDemo()" class="btn-primary text-xs py-2 px-3.5">
+            <i data-lucide="columns" class="w-3.5 h-3.5"></i>
+            Open Dual Counters (Counter 1 & Counter 2)
+          </button>
+        </div>
+      </div>
+
+      <!-- Interactive Quick Scan Simulator Box -->
+      <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
+          <div class="text-xs text-slate-300 font-semibold flex items-center gap-2">
+            <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i>
+            <span>Instant Test Scan (Simulate Counter Claim right now):</span>
+          </div>
+          <span class="text-[11px] text-slate-500">Clicking any button emits a realtime claim to all open tabs</span>
+        </div>
+
+        <div class="flex flex-wrap gap-2" id="quickTestPillList">
+          <!-- Dynamically populated sample test buttons -->
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="max-w-6xl mx-auto w-full mt-8 pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between text-xs text-slate-500 gap-4">
+    <div>
+      <span>© 2026 Medaithon Food System • Built for high-volume hackathon logistics</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="text-emerald-400 flex items-center gap-1">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+        WebSocket Engine Online
+      </span>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="/js/common.js"></script>
+  <script>
+    const socket = io();
+
+    // Update hero stats
+    socket.on('initial_stats', (data) => updateHero(data.stats));
+    socket.on('stats_update', (data) => updateHero(data.stats));
+    socket.on('meal_claimed', (data) => updateHero(data.stats));
+    socket.on('session_updated', (data) => updateHero(data.stats));
+
+    function updateHero(stats) {
+      if (!stats) return;
+      if (stats.session) {
+        document.getElementById('heroMealName').textContent = stats.session.name;
+        document.getElementById('heroMealStats').textContent = `${stats.claimed_count || 0} / ${stats.total_target || 0}`;
+      }
+    }
+
+    // Load sample test buttons
+    fetch('/api/participants?limit=8')
+      .then(r => r.json())
+      .then(json => {
+        if (json.success && json.data) {
+          const container = document.getElementById('quickTestPillList');
+          container.innerHTML = json.data.map(p => `
+            <button onclick="simulateScan('${p.id}', '${p.name}')" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-indigo-600/80 text-white border border-slate-700 hover:border-indigo-500 text-xs font-mono transition flex items-center gap-1.5">
+              <span>${p.id}</span>
+              <span class="text-slate-400 text-[11px] font-sans">(${p.name.split(' ')[0]})</span>
+            </button>
+          `).join('');
+        }
+      });
+
+    // Simulate scan directly from homepage
+    async function simulateScan(id, name) {
+      try {
+        const res = await fetch('/api/scans/claim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            participantId: id,
+            counterId: 'Counter 1',
+            volunteerName: 'Home Simulator'
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(`✅ Claimed meal for ${name} (${id})! Updated on all screens.`, 'success');
+          playSuccessChime();
+        } else {
+          showToast(`⚠️ ${data.message}`, 'error');
+          playDuplicateAlert();
+        }
+      } catch (e) {
+        showToast('Error sending scan', 'error');
+      }
+    }
+
+    // Launch Dual Counter Demo: opens Counter 1 and Counter 2 side by side
+    function launchDualCounterDemo() {
+      // Open Counter 1 in a new window/tab
+      localStorage.setItem('medaithon_counter_id', 'Counter 1');
+      window.open('/scanner.html', 'Counter1', 'width=600,height=750,left=50,top=50');
+      
+      // Delay slightly and open Counter 2
+      setTimeout(() => {
+        window.open('/scanner.html', 'Counter2', 'width=600,height=750,left=700,top=50');
+      }, 500);
+
+      showToast('Opening Counter 1 and Counter 2! Any scan in either will sync both instantly.', 'info');
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      refreshIcons();
+    });
+  </script>
+</body>
+</html>
