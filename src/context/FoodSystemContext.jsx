@@ -7,7 +7,7 @@ const FoodSystemContext = createContext();
 export function FoodSystemProvider({ children }) {
   const [socket, setSocket] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [activeTab, setActiveTab] = useState('scanner'); // 'scanner' | 'dashboard' | 'dual' | 'admin' | 'badges'
+  const [activeTab, setActiveTab] = useState('scanner'); // 'scanner' | 'dashboard' | 'admin' | 'badges'
   
   // Terminal Identity
   const [counterId, setCounterIdState] = useState(() => localStorage.getItem('medaithon_counter_id') || 'Counter 1');

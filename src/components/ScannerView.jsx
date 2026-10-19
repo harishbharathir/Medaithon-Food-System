@@ -17,12 +17,12 @@ import {
   Zap
 } from 'lucide-react';
 
-export default function ScannerView({ overrideCounterId = null }) {
+export default function ScannerView() {
   const {
     stats,
     sessions,
     activateSession,
-    counterId: globalCounterId,
+    counterId,
     setCounterId,
     volunteerName,
     setVolunteerName,
@@ -30,8 +30,7 @@ export default function ScannerView({ overrideCounterId = null }) {
     registerManualWalkin
   } = useFoodSystem();
 
-  // Allow independent counter in dual mode
-  const currentCounter = overrideCounterId || globalCounterId;
+  const currentCounter = counterId;
 
   const [barcodeInput, setBarcodeInput] = useState('');
   const [isScanning, setIsScanning] = useState(false);
@@ -261,22 +260,16 @@ export default function ScannerView({ overrideCounterId = null }) {
             Counter Configuration
           </label>
           <div className="grid grid-cols-2 gap-2 mb-2">
-            {!overrideCounterId ? (
-              <select
-                value={globalCounterId}
-                onChange={(e) => setCounterId(e.target.value)}
-                className="glass-input w-full text-xs font-semibold text-indigo-300"
-              >
-                <option value="Counter 1">Counter 1</option>
-                <option value="Counter 2">Counter 2</option>
-                <option value="Counter 3">Counter 3</option>
-                <option value="Counter 4">Counter 4</option>
-              </select>
-            ) : (
-              <div className="glass-input text-xs font-bold text-indigo-400 bg-indigo-500/10">
-                {currentCounter}
-              </div>
-            )}
+            <select
+              value={counterId}
+              onChange={(e) => setCounterId(e.target.value)}
+              className="glass-input w-full text-xs font-semibold text-indigo-300"
+            >
+              <option value="Counter 1">Counter 1</option>
+              <option value="Counter 2">Counter 2</option>
+              <option value="Counter 3">Counter 3</option>
+              <option value="Counter 4">Counter 4</option>
+            </select>
             <input
               type="text"
               value={volunteerName}

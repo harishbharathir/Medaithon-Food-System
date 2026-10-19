@@ -2,7 +2,6 @@ import React from 'react';
 import { FoodSystemProvider, useFoodSystem } from './context/FoodSystemContext';
 import Navbar from './components/Navbar';
 import ScannerView from './components/ScannerView';
-import DualCounterView from './components/DualCounterView';
 import LiveDashboard from './components/LiveDashboard';
 import AdminPanel from './components/AdminPanel';
 import BadgesView from './components/BadgesView';
@@ -18,7 +17,6 @@ function MainApp() {
 
         <main className="transition-all duration-300">
           {activeTab === 'scanner' && <ScannerView />}
-          {activeTab === 'dual' && <DualCounterView />}
           {activeTab === 'dashboard' && <LiveDashboard />}
           {activeTab === 'admin' && <AdminPanel />}
           {activeTab === 'badges' && <BadgesView />}
@@ -31,7 +29,7 @@ function MainApp() {
           <span>Medaithon Food Logistics & Distribution Engine • React + Vite + WebSockets</span>
         </div>
         <div className="flex items-center gap-4">
-          <span>Dual-Counter Real-time Synchronization Active</span>
+          <span>Real-time Food Distribution Active</span>
         </div>
       </footer>
 

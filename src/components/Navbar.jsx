@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useFoodSystem } from '../context/FoodSystemContext';
-import { Scan, Tv, ShieldCheck, QrCode, Columns, Volume2, VolumeX, Clock } from 'lucide-react';
+import { Scan, Tv, ShieldCheck, QrCode, Volume2, VolumeX, Clock } from 'lucide-react';
 
 export default function Navbar() {
   const { activeTab, setActiveTab, isConnected, soundEnabled, toggleSound, stats } = useFoodSystem();
@@ -17,7 +17,6 @@ export default function Navbar() {
 
   const navItems = [
     { id: 'scanner', label: 'Volunteer Scanner', icon: Scan },
-    { id: 'dual', label: 'Dual Counters (Sync)', icon: Columns, highlight: true },
     { id: 'dashboard', label: 'Live Dashboard', icon: Tv },
     { id: 'admin', label: 'Admin Portal', icon: ShieldCheck },
     { id: 'badges', label: 'ID Badges', icon: QrCode },

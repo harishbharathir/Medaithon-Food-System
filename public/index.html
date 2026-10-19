@@ -131,44 +131,18 @@
 
     </div>
 
-    <!-- Dual Counter Realtime Sync Demo Feature -->
+    <!-- Instant Test Scan Simulator -->
     <div class="glass-panel-elevated p-6 border-indigo-500/30">
-      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4 pb-4 border-b border-slate-800">
-        <div>
-          <span class="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5 mb-1">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            User Requirement Spotlight
-          </span>
-          <h3 class="text-lg font-bold text-white">
-            Dual Counter Realtime Synchronization
-          </h3>
-          <p class="text-xs text-slate-400 mt-0.5">
-            "if there is 2 counters that means it should increase in both the dashboard at the same time"
-          </p>
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
+        <div class="text-xs text-slate-300 font-semibold flex items-center gap-2">
+          <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i>
+          <span>Instant Test Scan (Simulate Meal Claim):</span>
         </div>
-
-        <div class="flex items-center gap-2">
-          <!-- Button to open Counter 1 and Counter 2 side by side in popup windows -->
-          <button onclick="launchDualCounterDemo()" class="btn-primary text-xs py-2 px-3.5">
-            <i data-lucide="columns" class="w-3.5 h-3.5"></i>
-            Open Dual Counters (Counter 1 & Counter 2)
-          </button>
-        </div>
+        <span class="text-[11px] text-slate-500">Clicking any button emits a realtime claim to all open tabs</span>
       </div>
 
-      <!-- Interactive Quick Scan Simulator Box -->
-      <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800">
-        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
-          <div class="text-xs text-slate-300 font-semibold flex items-center gap-2">
-            <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i>
-            <span>Instant Test Scan (Simulate Counter Claim right now):</span>
-          </div>
-          <span class="text-[11px] text-slate-500">Clicking any button emits a realtime claim to all open tabs</span>
-        </div>
-
-        <div class="flex flex-wrap gap-2" id="quickTestPillList">
-          <!-- Dynamically populated sample test buttons -->
-        </div>
+      <div class="flex flex-wrap gap-2" id="quickTestPillList">
+        <!-- Dynamically populated sample test buttons -->
       </div>
     </div>
 
@@ -244,20 +218,6 @@
       } catch (e) {
         showToast('Error sending scan', 'error');
       }
-    }
-
-    // Launch Dual Counter Demo: opens Counter 1 and Counter 2 side by side
-    function launchDualCounterDemo() {
-      // Open Counter 1 in a new window/tab
-      localStorage.setItem('medaithon_counter_id', 'Counter 1');
-      window.open('/scanner.html', 'Counter1', 'width=600,height=750,left=50,top=50');
-      
-      // Delay slightly and open Counter 2
-      setTimeout(() => {
-        window.open('/scanner.html', 'Counter2', 'width=600,height=750,left=700,top=50');
-      }, 500);
-
-      showToast('Opening Counter 1 and Counter 2! Any scan in either will sync both instantly.', 'info');
     }
 
     window.addEventListener('DOMContentLoaded', () => {

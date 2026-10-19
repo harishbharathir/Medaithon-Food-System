@@ -13,7 +13,6 @@ Designed specifically to eliminate DOM thrashing and frontend bottlenecks during
 3. **Centralized Reactive State (`FoodSystemContext`)**: A single reactive context connects Counter 1, Counter 2, the Live Dashboard, and the Admin portal, guaranteeing cross-device sync with zero latency.
 4. **Clean Component Architecture**:
    - `ScannerView`: Camera barcode scanning (`html5-qrcode`) + USB handheld gun support + cooldown debounce + instant duplicate blocking.
-   - `DualCounterView`: Side-by-side live simulator demonstrating Counter 1 and Counter 2 real-time synchronization.
    - `LiveDashboard`: High-impact dining hall projector display with real-time claims stream, Chart.js hourly velocity graph, and full-screen mode.
    - `AdminPanel`: Live quota updater, session name updater, session switcher, Add Manual Walk-in Entry form, CSV report exporter.
    - `BadgesView`: Printable participant badges with Code128 barcodes rendered via `JsBarcode`.
@@ -40,8 +39,7 @@ Runs both the backend API server (`port 3000`) and Vite HMR frontend (`port 5173
 
 Open **[http://localhost:3000](http://localhost:3000)** in your browser:
 
-- 📷 **Volunteer Scanner**: Select **Counter 1**, **Counter 2**, or custom counters. Scan via camera or USB scanner.
-- ⚡ **Dual Counters (Sync Simulator)**: View **Counter 1** and **Counter 2** side-by-side to test live cross-counter incrementing and instant duplicate prevention.
+- 📷 **Volunteer Scanner**: Select **Counter 1**, **Counter 2**, or custom counters. Auto-detects IDs via camera, barcode gun, or typing.
 - 📊 **Live Dashboard**: Big-screen monitor displaying Total Quota, Claimed count, Remaining count, Veg/Non-Veg breakdown, and live claim feed.
 - ⚙️ **Admin Portal**: Change meal names and target quota live; register walk-in participants not listed in the DB; download CSV reports.
 - 🏷️ **ID Badges**: View and print participant ID badges with scannable Code128 barcodes.
@@ -50,13 +48,10 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser:
 
 ---
 
-## 🧪 Testing Multi-Counter Sync in 10 Seconds
+## 🧪 Testing Real-Time Meal Claims in 10 Seconds
 
 1. Open **[http://localhost:3000](http://localhost:3000)**.
-2. Click the **"Dual Counters (Sync)"** tab in the navigation bar.
-3. You will see **Terminal 1 (Counter 1)** and **Terminal 2 (Counter 2)** side-by-side.
-4. On Counter 1, click test pill `MED-1001` (or scan any barcode):
-   - Counter 1 plays a success chime, triggers confetti, and claims the meal.
-   - Counter 2's live shared count increments **simultaneously** without page reload!
-5. Now click `MED-1001` on Counter 2:
-   - Counter 2 triggers a double-buzz alert and displays a red warning: *"ALREADY CLAIMED at Counter 1"*.
+2. Go to the **"Volunteer Scanner"** tab.
+3. Click any instant test pill like `MED-1001` (or scan any barcode):
+   - Scanner plays a success chime, triggers confetti, and claims the meal instantly without pressing any button.
+   - The Live Dashboard updates **simultaneously** in real-time!

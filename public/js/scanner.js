@@ -1,4 +1,4 @@
-// Volunteer Scanner Terminal Logic (Dual Counter Sync + Camera + Barcode Scanner)
+// Volunteer Scanner Terminal Logic (Camera + Barcode Scanner)
 
 let socket = null;
 let html5QrCode = null;
