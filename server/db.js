@@ -1,9 +1,19 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 
-const MONGODB_URI = process.env.MONGODB_URI;
+// Auto-clean URI: strip surrounding quotes and ensure target database path
+let rawUri = (process.env.MONGODB_URI || '').trim().replace(/^["']|["']$/g, '');
+let MONGODB_URI = rawUri;
+if (MONGODB_URI && !MONGODB_URI.includes('/medaithon') && !MONGODB_URI.includes('/medaithon_food') && !MONGODB_URI.includes('/horizonxt')) {
+  if (MONGODB_URI.includes('?')) {
+    MONGODB_URI = MONGODB_URI.replace('?', '/medaithon?');
+  } else {
+    MONGODB_URI = MONGODB_URI.endsWith('/') ? `${MONGODB_URI}medaithon` : `${MONGODB_URI}/medaithon`;
+  }
+}
+
 if (!MONGODB_URI) {
-  console.error('⚠️ WARNING: MONGODB_URI is not set in environment variables! Please add it to your .env file or Render dashboard.');
+  console.error('⚠️ WARNING: MONGODB_URI is not set in environment variables! Please add it to your .env file.');
 }
 
 // ----------------- MONGOOSE SCHEMAS ----------------- //
@@ -19,18 +29,26 @@ const mealSessionSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
+// Flexible participant schema allowing all fields from registration / desk sticker systems
 const participantSchema = new mongoose.Schema({
-  id: { type: String, required: true, unique: true, uppercase: true, trim: true },
+  id: { type: String, uppercase: true, trim: true },
+  barcode: { type: String, uppercase: true, trim: true },
+  registrationId: { type: String, uppercase: true, trim: true },
+  teamId: { type: String, trim: true },
   name: { type: String, required: true, trim: true },
   email: { type: String, default: '' },
   phone: { type: String, default: '' },
   college: { type: String, default: '' },
   team_name: { type: String, default: '' },
+  teamName: { type: String, default: '' },
+  role: { type: String, default: 'Member' },
   diet_pref: { type: String, default: 'Veg' },
   is_manual_entry: { type: Number, default: 0 },
   notes: { type: String, default: '' },
-  created_at: { type: Date, default: Date.now }
-});
+  foodServings: { type: Array, default: [] },
+  created_at: { type: Date, default: Date.now },
+  createdAt: { type: Date, default: Date.now }
+}, { strict: false });
 
 const mealClaimSchema = new mongoose.Schema({
   claim_id: { type: Number, unique: true },
@@ -59,65 +77,77 @@ async function getNextClaimId() {
   return (last && typeof last.claim_id === 'number' ? last.claim_id : 0) + 1;
 }
 
+// Normalize participant data across diverse database schemas
+function normalizeParticipant(p) {
+  if (!p) return null;
+  const canonicalId = p.barcode || p.registrationId || p.id || p.teamId || '';
+  const team = p.team_name || p.teamName || '';
+  return {
+    ...p,
+    id: canonicalId,
+    barcode: p.barcode || canonicalId,
+    registrationId: p.registrationId || canonicalId,
+    teamId: p.teamId || '',
+    team_name: team,
+    teamName: team,
+    diet_pref: p.diet_pref || 'Veg'
+  };
+}
+
 // ----------------- DB INITIALIZATION & SEEDING ----------------- //
 
 async function initDb() {
   if (mongoose.connection.readyState === 1) return;
 
   try {
-    console.log('📡 Connecting to MongoDB Atlas Cloud...');
+    console.log(`📡 Connecting to MongoDB Atlas Cloud (${MONGODB_URI.split('@')[1] || 'Cluster'})...`);
     await mongoose.connect(MONGODB_URI, {
       serverSelectionTimeoutMS: 10000
     });
-    console.log('✅ Connected to MongoDB Atlas successfully!');
+    console.log(`✅ Connected to MongoDB Atlas successfully! (DB: ${mongoose.connection.name})`);
 
-    // Seed default meal sessions if none exist
+    // Check Meal Sessions
     const sessionCount = await MealSession.countDocuments();
     if (sessionCount === 0) {
-      const today = new Date().toISOString().split('T')[0];
-      const defaultSessions = [
-        { id: 1, name: 'Day 1 - Lunch (Medaithon Grand Feast)', date: today, start_time: '12:30', end_time: '15:00', total_target: 350, is_active: 1 },
-        { id: 2, name: 'Day 1 - High Tea & Energy Snacks', date: today, start_time: '17:00', end_time: '18:30', total_target: 300, is_active: 0 },
-        { id: 3, name: 'Day 1 - Dinner (Hackathon Night)', date: today, start_time: '20:30', end_time: '23:00', total_target: 350, is_active: 0 },
-        { id: 4, name: 'Day 2 - Power Breakfast', date: today, start_time: '08:00', end_time: '10:00', total_target: 300, is_active: 0 },
-        { id: 5, name: 'Day 2 - Lunch & Valedictory Meal', date: today, start_time: '13:00', end_time: '15:00', total_target: 350, is_active: 0 },
-      ];
-      await MealSession.insertMany(defaultSessions);
-      console.log('🌱 Seeded 5 default meal sessions to MongoDB Atlas');
+      // Check if existing meals collection has records to import
+      const mealsCol = mongoose.connection.db.collection('meals');
+      const existingMeals = await mealsCol.find().sort({ date: 1 }).toArray();
+
+      if (existingMeals && existingMeals.length > 0) {
+        const mapped = existingMeals.map((m, idx) => {
+          const dStr = m.date ? new Date(m.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+          return {
+            id: idx + 1,
+            name: `${m.mealType || 'Meal'} (${m.startTime || ''} - ${m.endTime || ''})`.trim(),
+            date: dStr,
+            start_time: m.startTime || '',
+            end_time: m.endTime || '',
+            total_target: 350,
+            is_active: m.isActive ? 1 : (idx === 0 ? 1 : 0)
+          };
+        });
+        await MealSession.insertMany(mapped);
+        console.log(`🌱 Imported ${mapped.length} meal sessions from existing meals collection`);
+      } else {
+        const today = new Date().toISOString().split('T')[0];
+        const defaultSessions = [
+          { id: 1, name: 'Day 1 - Lunch (Medaithon Grand Feast)', date: today, start_time: '12:30', end_time: '15:00', total_target: 350, is_active: 1 },
+          { id: 2, name: 'Day 1 - High Tea & Energy Snacks', date: today, start_time: '17:00', end_time: '18:30', total_target: 300, is_active: 0 },
+          { id: 3, name: 'Day 1 - Dinner (Hackathon Night)', date: today, start_time: '20:30', end_time: '23:00', total_target: 350, is_active: 0 },
+          { id: 4, name: 'Day 2 - Power Breakfast', date: today, start_time: '08:00', end_time: '10:00', total_target: 300, is_active: 0 },
+          { id: 5, name: 'Day 2 - Lunch & Valedictory Meal', date: today, start_time: '13:00', end_time: '15:00', total_target: 350, is_active: 0 },
+        ];
+        await MealSession.insertMany(defaultSessions);
+        console.log('🌱 Seeded 5 default meal sessions to MongoDB Atlas');
+      }
     }
 
-    // Seed default participants if none exist (all 0 claims / fresh)
+    // Seed default participants ONLY if the collection is completely empty
     const participantCount = await Participant.countDocuments();
     if (participantCount === 0) {
-      const sampleParticipants = [
-        { id: 'MED-1001', name: 'Aarav Sharma', email: 'aarav@medtech.org', phone: '+91 9876543210', college: 'IIT Madras', team_name: 'NeuralPulse', diet_pref: 'Veg', is_manual_entry: 0, notes: 'Team Lead' },
-        { id: 'MED-1002', name: 'Priya Sundaram', email: 'priya@biocare.in', phone: '+91 9876543211', college: 'PSG Tech', team_name: 'NeuralPulse', diet_pref: 'Non-Veg', is_manual_entry: 0, notes: 'Hardware Lead' },
-        { id: 'MED-1003', name: 'Karthik Raja', email: 'karthik@medai.co', phone: '+91 9876543212', college: 'SRM Institute', team_name: 'PulseAI', diet_pref: 'Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1004', name: 'Ananya Deshmukh', email: 'ananya@medaithon.com', phone: '+91 9876543213', college: 'BITS Pilani', team_name: 'PulseAI', diet_pref: 'Non-Veg', is_manual_entry: 0, notes: 'Allergy: Peanuts' },
-        { id: 'MED-1005', name: 'Rohan Varma', email: 'rohan.v@gmail.com', phone: '+91 9876543214', college: 'NIT Trichy', team_name: 'CardioVision', diet_pref: 'Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1006', name: 'Sneha Patel', email: 'sneha.p@mit.edu', phone: '+91 9876543215', college: 'MIT Manipal', team_name: 'CardioVision', diet_pref: 'Non-Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1007', name: 'Harish Kumar', email: 'harish@techlead.in', phone: '+91 9876543216', college: 'Anna University', team_name: 'BioSync', diet_pref: 'Veg', is_manual_entry: 0, notes: 'Event Organizer' },
-        { id: 'MED-1008', name: 'Divya Krishnan', email: 'divya.k@gmail.com', phone: '+91 9876543217', college: 'Vellore Institute', team_name: 'BioSync', diet_pref: 'Non-Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1009', name: 'Vikram Aditya', email: 'vikram.a@med.in', phone: '+91 9876543218', college: 'Amrita Vishwa', team_name: 'SynapseNet', diet_pref: 'Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1010', name: 'Meera Nair', email: 'meera.n@medicare.io', phone: '+91 9876543219', college: 'Amrita Vishwa', team_name: 'SynapseNet', diet_pref: 'Non-Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1011', name: 'Gautam Menon', email: 'gautam@neuro.org', phone: '+91 9876543220', college: 'SSN College', team_name: 'DeepCare', diet_pref: 'Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1012', name: 'Deepika Iyer', email: 'deepika.i@health.ai', phone: '+91 9876543221', college: 'SSN College', team_name: 'DeepCare', diet_pref: 'Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1013', name: 'Siddharth Rao', email: 'sid.rao@gmail.com', phone: '+91 9876543222', college: 'Kumaraguru Tech', team_name: 'DermaLens', diet_pref: 'Non-Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1014', name: 'Kavya Subramanian', email: 'kavya.s@medai.in', phone: '+91 9876543223', college: 'Kumaraguru Tech', team_name: 'DermaLens', diet_pref: 'Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1015', name: 'Naveen Raj', email: 'naveen.r@outlook.com', phone: '+91 9876543224', college: 'Bannari Amman', team_name: 'SmartIV', diet_pref: 'Non-Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1016', name: 'Shreya Ghosh', email: 'shreya.g@biotech.org', phone: '+91 9876543225', college: 'Jadavpur Univ', team_name: 'SmartIV', diet_pref: 'Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1017', name: 'Aditya Birla', email: 'aditya.b@aiims.edu', phone: '+91 9876543226', college: 'AIIMS Research', team_name: 'EchoBio', diet_pref: 'Non-Veg', is_manual_entry: 0, notes: 'Mentor' },
-        { id: 'MED-1018', name: 'Tanvi Joshi', email: 'tanvi.j@medhack.com', phone: '+91 9876543227', college: 'COEP Pune', team_name: 'EchoBio', diet_pref: 'Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1019', name: 'Arjun Reddy', email: 'arjun.r@hyderabad.ac', phone: '+91 9876543228', college: 'IIIT Hyderabad', team_name: 'VoxelMed', diet_pref: 'Non-Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1020', name: 'Pooja Hegde', email: 'pooja.h@techcare.in', phone: '+91 9876543229', college: 'RV College', team_name: 'VoxelMed', diet_pref: 'Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1021', name: 'Manoj Tiwari', email: 'manoj.t@delhitech.in', phone: '+91 9876543230', college: 'DTU Delhi', team_name: 'GlucoSense', diet_pref: 'Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1022', name: 'Ritika Sen', email: 'ritika.s@kolkata.edu', phone: '+91 9876543231', college: 'Calcutta Univ', team_name: 'GlucoSense', diet_pref: 'Non-Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1023', name: 'Abhishek Roy', email: 'abhishek@medaithon.org', phone: '+91 9876543232', college: 'Heritage Tech', team_name: 'OxyTrack', diet_pref: 'Non-Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1024', name: 'Sanjana Chawla', email: 'sanjana@neurotech.com', phone: '+91 9876543233', college: 'Thapar Univ', team_name: 'OxyTrack', diet_pref: 'Veg', is_manual_entry: 0, notes: '' },
-        { id: 'MED-1025', name: 'Vigneshwaran M', email: 'vicky@chennaitech.edu', phone: '+91 9876543234', college: 'CIT Chennai', team_name: 'Stethoscope+', diet_pref: 'Non-Veg', is_manual_entry: 0, notes: '' }
-      ];
-      await Participant.insertMany(sampleParticipants);
-      console.log('🌱 Seeded 25 default participants to MongoDB Atlas (All 0 claims / fresh)');
+      console.log('⚠️ Participants collection is empty. Please check your database connection.');
+    } else {
+      console.log(`👥 Found ${participantCount} active participants in MongoDB Atlas`);
     }
   } catch (err) {
     console.error('❌ MongoDB initialization error:', err);
@@ -196,29 +226,54 @@ const dbQueries = {
     return await MealSession.deleteOne({ id: sid });
   },
 
-  // Find participant by ID or barcode
+  // Find participant by ID, Barcode, Registration ID or Team ID
   async getParticipantById(id) {
-    const cleanId = (id || '').trim().toUpperCase();
-    return await Participant.findOne({ id: cleanId }).lean();
+    if (!id) return null;
+    const cleanId = String(id).trim();
+    const upperId = cleanId.toUpperCase();
+    const query = {
+      $or: [
+        { barcode: cleanId },
+        { barcode: upperId },
+        { id: cleanId },
+        { id: upperId },
+        { registrationId: cleanId },
+        { registrationId: upperId },
+        { teamId: cleanId },
+        { teamId: upperId }
+      ]
+    };
+    const participant = await Participant.findOne(query).lean();
+    return normalizeParticipant(participant);
   },
 
   // Check if participant has claimed for this session
   async getClaim(sessionId, participantId) {
     const sid = parseInt(sessionId);
-    const pid = (participantId || '').trim().toUpperCase();
-    const claim = await MealClaim.findOne({ session_id: sid, participant_id: pid }).lean();
+    const pid = String(participantId || '').trim();
+    const participant = await this.getParticipantById(pid);
+
+    const candidates = [pid, pid.toUpperCase()];
+    if (participant) {
+      if (participant.id) candidates.push(participant.id);
+      if (participant.barcode) candidates.push(participant.barcode);
+      if (participant.registrationId) candidates.push(participant.registrationId);
+    }
+
+    const claim = await MealClaim.findOne({
+      session_id: sid,
+      participant_id: { $in: [...new Set(candidates)] }
+    }).lean();
+
     if (!claim) return null;
 
-    const [participant, session] = await Promise.all([
-      Participant.findOne({ id: pid }).lean(),
-      MealSession.findOne({ id: sid }).lean()
-    ]);
+    const session = await MealSession.findOne({ id: sid }).lean();
 
     return {
       ...claim,
       id: claim.claim_id,
       participant_name: participant?.name || '',
-      team_name: participant?.team_name || '',
+      team_name: participant?.team_name || participant?.teamName || '',
       college: participant?.college || '',
       diet_pref: participant?.diet_pref || 'Veg',
       session_name: session?.name || ''
@@ -228,29 +283,45 @@ const dbQueries = {
   // Record meal claim
   async recordClaim(sessionId, participantId, counterId, volunteerName) {
     const sid = parseInt(sessionId);
-    const pid = (participantId || '').trim().toUpperCase();
+    const pid = String(participantId || '').trim();
+    const participant = await this.getParticipantById(pid);
+    const canonicalId = participant ? (participant.barcode || participant.id || pid.toUpperCase()) : pid.toUpperCase();
     const claimId = await getNextClaimId();
 
     const claim = new MealClaim({
       claim_id: claimId,
       session_id: sid,
-      participant_id: pid,
+      participant_id: canonicalId,
       counter_id: counterId,
       volunteer_name: volunteerName || 'Volunteer',
       claimed_at: new Date()
     });
     await claim.save();
 
-    const [participant, session] = await Promise.all([
-      Participant.findOne({ id: pid }).lean(),
-      MealSession.findOne({ id: sid }).lean()
-    ]);
+    const session = await MealSession.findOne({ id: sid }).lean();
+
+    // Also sync to participant's foodServings if participant exists in participants collection
+    if (participant && participant._id) {
+      await Participant.updateOne(
+        { _id: participant._id },
+        {
+          $push: {
+            foodServings: {
+              mealType: session?.name || `Meal Session ${sid}`,
+              servedAt: claim.claimed_at,
+              counterId,
+              method: 'barcode'
+            }
+          }
+        }
+      ).catch(() => {});
+    }
 
     return {
       claim_id: claimId,
       id: claimId,
       session_id: sid,
-      participant_id: pid,
+      participant_id: canonicalId,
       counter_id: counterId,
       volunteer_name: volunteerName || 'Volunteer',
       claimed_at: claim.claimed_at,
@@ -258,7 +329,7 @@ const dbQueries = {
       email: participant?.email || '',
       phone: participant?.phone || '',
       college: participant?.college || '',
-      team_name: participant?.team_name || '',
+      team_name: participant?.team_name || participant?.teamName || '',
       diet_pref: participant?.diet_pref || 'Veg',
       meal_name: session?.name || ''
     };
@@ -269,11 +340,13 @@ const dbQueries = {
     const cleanId = (participant.id || '').trim().toUpperCase();
     const newP = new Participant({
       id: cleanId,
+      barcode: cleanId,
       name: (participant.name || '').trim(),
       email: participant.email || '',
       phone: participant.phone || '',
       college: participant.college || '',
       team_name: participant.team_name || '',
+      teamName: participant.team_name || '',
       diet_pref: participant.diet_pref || 'Veg',
       is_manual_entry: participant.is_manual_entry ? 1 : 0,
       notes: participant.notes || ''
@@ -284,24 +357,36 @@ const dbQueries = {
 
   // Update participant
   async updateParticipant(id, data) {
-    const cleanId = (id || '').trim().toUpperCase();
+    const cleanId = (id || '').trim();
+    const participant = await this.getParticipantById(cleanId);
+    if (!participant) return null;
+
     const update = {};
     if (data.name !== undefined) update.name = data.name.trim();
     if (data.email !== undefined) update.email = data.email;
     if (data.phone !== undefined) update.phone = data.phone;
     if (data.college !== undefined) update.college = data.college;
-    if (data.team_name !== undefined) update.team_name = data.team_name;
+    if (data.team_name !== undefined) {
+      update.team_name = data.team_name;
+      update.teamName = data.team_name;
+    }
     if (data.diet_pref !== undefined) update.diet_pref = data.diet_pref;
     if (data.notes !== undefined) update.notes = data.notes;
-    await Participant.updateOne({ id: cleanId }, { $set: update });
+
+    await Participant.updateOne({ _id: participant._id }, { $set: update });
     return await this.getParticipantById(cleanId);
   },
 
   // Delete participant
   async deleteParticipant(id) {
-    const cleanId = (id || '').trim().toUpperCase();
-    await MealClaim.deleteMany({ participant_id: cleanId });
-    return await Participant.deleteOne({ id: cleanId });
+    const cleanId = (id || '').trim();
+    const participant = await this.getParticipantById(cleanId);
+    if (!participant) return { deletedCount: 0 };
+
+    await MealClaim.deleteMany({
+      participant_id: { $in: [cleanId, cleanId.toUpperCase(), participant.barcode, participant.id] }
+    });
+    return await Participant.deleteOne({ _id: participant._id });
   },
 
   // Get participants with search and meal count
@@ -312,30 +397,55 @@ const dbQueries = {
       const regex = new RegExp(q, 'i');
       query = {
         $or: [
+          { barcode: regex },
           { id: regex },
+          { registrationId: regex },
+          { teamId: regex },
           { name: regex },
           { team_name: regex },
-          { college: regex }
+          { teamName: regex },
+          { college: regex },
+          { phone: regex },
+          { email: regex }
         ]
       };
     }
-    const participants = await Participant.find(query).sort({ created_at: -1 }).skip(offset).limit(limit).lean();
-    const pIds = participants.map(p => p.id);
+    const participants = await Participant.find(query)
+      .sort({ createdAt: -1, created_at: -1 })
+      .skip(offset)
+      .limit(limit)
+      .lean();
+
+    const candidateIds = [];
+    participants.forEach(p => {
+      if (p.id) candidateIds.push(p.id);
+      if (p.barcode) candidateIds.push(p.barcode);
+      if (p.registrationId) candidateIds.push(p.registrationId);
+    });
+
     const mealCounts = await MealClaim.aggregate([
-      { $match: { participant_id: { $in: pIds } } },
+      { $match: { participant_id: { $in: candidateIds } } },
       { $group: { _id: '$participant_id', count: { $sum: 1 } } }
     ]);
     const countMap = {};
     mealCounts.forEach(m => { countMap[m._id] = m.count; });
-    return participants.map(p => ({
-      ...p,
-      total_meals_taken: countMap[p.id] || 0
-    }));
+
+    return participants.map(p => {
+      const norm = normalizeParticipant(p);
+      const extraServings = Array.isArray(p.foodServings) ? p.foodServings.length : 0;
+      const directClaims = (countMap[norm.id] || 0) || (norm.barcode ? (countMap[norm.barcode] || 0) : 0);
+      return {
+        ...norm,
+        total_meals_taken: Math.max(directClaims, extraServings)
+      };
+    });
   },
 
   // Get live statistics for active session
   async getActiveSessionStats() {
     const activeSession = await this.getActiveSession();
+    const totalParticipants = await Participant.countDocuments();
+
     if (!activeSession) {
       return {
         session: null,
@@ -344,7 +454,7 @@ const dbQueries = {
         remaining_count: 0,
         veg_claimed: 0,
         non_veg_claimed: 0,
-        total_participants: await Participant.countDocuments(),
+        total_participants: totalParticipants,
         counters: {},
         hourly_velocity: [],
         recent_claims: []
@@ -357,9 +467,21 @@ const dbQueries = {
 
     // Get participant details for diet counts and recent claims
     const pIds = [...new Set(claims.map(c => c.participant_id))];
-    const participants = await Participant.find({ id: { $in: pIds } }).lean();
+    const participants = await Participant.find({
+      $or: [
+        { barcode: { $in: pIds } },
+        { id: { $in: pIds } },
+        { registrationId: { $in: pIds } }
+      ]
+    }).lean();
+
     const pMap = {};
-    participants.forEach(p => { pMap[p.id] = p; });
+    participants.forEach(p => {
+      const norm = normalizeParticipant(p);
+      pMap[norm.id] = norm;
+      if (norm.barcode) pMap[norm.barcode] = norm;
+      if (norm.registrationId) pMap[norm.registrationId] = norm;
+    });
 
     let vegClaimed = 0;
     let nonVegClaimed = 0;
@@ -374,9 +496,8 @@ const dbQueries = {
       const diet = (p?.diet_pref || '').toLowerCase();
       if (diet === 'veg') vegClaimed++;
       else if (diet.includes('non')) nonVegClaimed++;
+      else vegClaimed++; // default
     });
-
-    const totalParticipants = await Participant.countDocuments();
 
     // Recent claims (last 50)
     const recentClaims = claims.slice(0, 50).map(c => {
@@ -390,7 +511,7 @@ const dbQueries = {
         claimed_at: c.claimed_at,
         participant_name: p?.name || '',
         college: p?.college || '',
-        team_name: p?.team_name || '',
+        team_name: p?.team_name || p?.teamName || '',
         diet_pref: p?.diet_pref || 'Veg',
         meal_name: activeSession.name
       };
@@ -432,12 +553,24 @@ const dbQueries = {
     const sIds = [...new Set(claims.map(c => c.session_id))];
 
     const [participants, sessions] = await Promise.all([
-      Participant.find({ id: { $in: pIds } }).lean(),
+      Participant.find({
+        $or: [
+          { barcode: { $in: pIds } },
+          { id: { $in: pIds } },
+          { registrationId: { $in: pIds } }
+        ]
+      }).lean(),
       MealSession.find({ id: { $in: sIds } }).lean()
     ]);
 
     const pMap = {};
-    participants.forEach(p => { pMap[p.id] = p; });
+    participants.forEach(p => {
+      const norm = normalizeParticipant(p);
+      pMap[norm.id] = norm;
+      if (norm.barcode) pMap[norm.barcode] = norm;
+      if (norm.registrationId) pMap[norm.registrationId] = norm;
+    });
+
     const sMap = {};
     sessions.forEach(s => { sMap[s.id] = s; });
 
@@ -453,7 +586,7 @@ const dbQueries = {
         email: p?.email || '',
         phone: p?.phone || '',
         college: p?.college || '',
-        team_name: p?.team_name || '',
+        team_name: p?.team_name || p?.teamName || '',
         diet_pref: p?.diet_pref || '',
         is_manual_entry: p?.is_manual_entry || 0,
         counter_id: c.counter_id,
